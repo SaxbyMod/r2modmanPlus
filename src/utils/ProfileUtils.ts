@@ -17,21 +17,8 @@ import * as PackageDb from '../r2mm/manager/PackageDexieStore';
 import ProfileModList from "../r2mm/mods/ProfileModList";
 
 export async function exportModsToCombos(exportMods: ExportMod[], community: string): Promise<ThunderstoreCombo[]> {
-    const tsMods = await PackageDb.getPackagesByNames(community, exportMods.map((m) => m.getName()));
-
-    const combos = tsMods.map((tsMod) => {
-        const targetMod = exportMods.find((expMod) => tsMod.getFullName() == expMod.getName());
-        const version = targetMod
-            ? tsMod.getVersions().find((ver) => ver.getVersionNumber().isEqualTo(targetMod.getVersionNumber()))
-            : undefined;
-
-        if (version) {
-            const combo = new ThunderstoreCombo();
-            combo.setMod(tsMod);
-            combo.setVersion(version);
-            return combo;
-        }
-    }).filter((combo): combo is ThunderstoreCombo => combo !== undefined);
+    const dependencyStrings = exportMods.map((m) => m.getDependencyString());
+    const combos = await PackageDb.getCombosByDependencyStrings(community, dependencyStrings);
 
     if (combos.length === 0) {
         throw new R2Error(
