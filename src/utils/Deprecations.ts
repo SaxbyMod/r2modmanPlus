@@ -52,6 +52,10 @@ export class Deprecations {
         deprecationMap.set(mod.getFullName(), false);
         return false;
 
+        // TODO: version information was dropped from ThunderstoreMod to
+        // save memory. Accessing dependencies weren't added to the class
+        // since it's not currently used anywhere. Consider adding a
+        // method for this purpose if this code is ever actually used.
         // for (const dependencyNameAndVersion of mod.getLatestVersion().getDependencies()) {
         //     const dependencyName = dependencyNameAndVersion.substring(0, dependencyNameAndVersion.lastIndexOf('-'));
 

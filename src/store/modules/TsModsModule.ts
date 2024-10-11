@@ -80,8 +80,7 @@ export const TsModsModule = {
                 if (tsMod === undefined) {
                     state.cache.set(cacheKey, {tsMod: undefined, isLatest: true});
                 } else {
-                    const latestVersionNumber = tsMod.getLatestVersion().getVersionNumber();
-                    const isLatest = mod.getVersionNumber().isEqualOrNewerThan(latestVersionNumber);
+                    const isLatest = mod.getVersionNumber().isEqualOrNewerThan(tsMod.getLatestVersionNumber());
                     state.cache.set(cacheKey, {tsMod, isLatest});
                 }
             }

@@ -1,7 +1,7 @@
 import ThunderstoreVersion from './ThunderstoreVersion';
+import VersionNumber from './VersionNumber';
 
 export default class ThunderstoreMod extends ThunderstoreVersion {
-    private versions: ThunderstoreVersion[] = [];
     private rating: number = 0;
     private owner: string = '';
     private packageUrl: string = '';
@@ -14,6 +14,7 @@ export default class ThunderstoreMod extends ThunderstoreVersion {
     private categories: string[] = [];
     private hasNsfwContent: boolean = false;
     private donationLink: string | undefined;
+    private latestVersion: string = '';
 
     public static parseFromThunderstoreData(data: any): ThunderstoreMod {
         const mod = new ThunderstoreMod();
@@ -24,43 +25,37 @@ export default class ThunderstoreMod extends ThunderstoreVersion {
         mod.setDateUpdated(data.date_updated);
         mod.setDeprecatedStatus(data.is_deprecated);
         mod.setPinnedStatus(data.is_pinned);
-        const versions = [];
-        for (const version of data.versions) {
-            versions.push(new ThunderstoreVersion().make(version));
-        }
-        mod.setVersions(versions);
-        mod.setDownloadCount(
-            mod.versions
-                .map(version => version.getDownloadCount())
-                .reduce((x, y) => x + y)
-        );
         mod.setRating(data.rating_score);
         mod.setTotalDownloads(
-            mod.getVersions()
-                .map(x => x.getDownloadCount())
-                .reduce((x, y) => x + y)
+            data.versions.reduce(
+                (x: number, y: {downloads: number}) => x + y.downloads,
+                0
+            )
         );
         mod.setPackageUrl(data.package_url);
         mod.setCategories(data.categories);
         mod.setNsfwFlag(data.has_nsfw_content);
         mod.setDonationLink(data.donation_link);
+        mod.setLatestVersion(data.versions[0].version_number);
+        mod.setDescription(data.versions[0].description);
+        mod.setIcon(data.versions[0].icon);
         return mod;
     }
 
-    public getVersions(): ThunderstoreVersion[] {
-        return this.versions;
+    public getLatestVersion(): string {
+        return this.latestVersion;
     }
 
-    public setVersions(versions: ThunderstoreVersion[]) {
-        this.versions = versions;
+    public setLatestVersion(versionNumber: string) {
+        this.latestVersion = versionNumber;
     }
 
-    public getLatestVersion(): ThunderstoreVersion {
-        return this.getVersions().reduce(reduceToNewestVersion);
+    public getLatestVersionNumber(): VersionNumber {
+        return new VersionNumber(this.latestVersion);
     }
 
     public getLatestDependencyString(): string {
-        return `${this.getFullName()}-${this.getLatestVersion().toString()}`;
+        return `${this.getFullName()}-${this.getLatestVersion()}`;
     }
 
     public getRating(): number {
