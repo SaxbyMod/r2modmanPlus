@@ -190,7 +190,12 @@ export default class ImportProfileModal extends mixins(ProfilesMixin) {
                                     try {
                                         await FileUtils.emptyDirectory(path.join(Profile.getDirectory(), event.detail));
                                     } catch (e) {
-                                        console.log("Failed to empty directory:", e);
+                                        this.$store.commit('error/handleError', new R2Error(
+                                            "Failed to import the profile.",
+                                            "Failed to empty directory while extracting the profile files. Either the folder doesn't exist, or the combination of the profile's name and the path of the profile folder is too long.",
+                                        ));
+                                        this.closeModal();
+                                        return;
                                     }
                                     await fs.rmdir(path.join(Profile.getDirectory(), event.detail));
                                     await fs.rename(path.join(Profile.getDirectory(), profileName), path.join(Profile.getDirectory(), event.detail));
