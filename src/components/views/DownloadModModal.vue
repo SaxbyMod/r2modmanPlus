@@ -75,9 +75,9 @@
                 <p>The following mods will be downloaded and installed:</p>
                 <br/>
                 <ul class="list">
-                    <li class="list-item" v-for='(key, index) in $store.getters["profile/modsWithUpdates"]'
-                        :key='`to-update-${index}-${key.getVersion().getFullName()}`'>
-                        {{key.getVersion().getName()}} will be updated to: {{key.getVersion().getVersionNumber().toString()}}
+                    <li class="list-item" v-for='(mod, index) in $store.getters["profile/modsWithUpdates"]'
+                        :key='`to-update-${index}-${mod.getFullName()}`'>
+                        {{mod.getName()}} will be updated to: {{mod.getLatestVersion()}}
                     </li>
                 </ul>
             </template>
@@ -106,6 +106,7 @@ import Game from '../../model/game/Game';
 import ConflictManagementProvider from '../../providers/generic/installing/ConflictManagementProvider';
 import { MOD_LOADER_VARIANTS } from '../../r2mm/installing/profile_installers/ModLoaderVariantRecord';
 import ModalCard from '../ModalCard.vue';
+import * as PackageDb from '../../r2mm/manager/PackageDexieStore';
 
 interface DownloadProgress {
     assignId: number;
@@ -150,7 +151,6 @@ let assignId = 0;
         public static async downloadSpecific(
             profile: Profile,
             combo: ThunderstoreCombo,
-            thunderstorePackages: ThunderstoreMod[],
             ignoreCache: boolean
         ): Promise<void> {
             return new Promise((resolve, reject) => {
@@ -166,7 +166,7 @@ let assignId = 0;
                 };
                 DownloadModModal.allVersions.push([currentAssignId, progressObject]);
                 setTimeout(() => {
-                    ThunderstoreDownloaderProvider.instance.download(profile.asImmutableProfile(), tsMod, tsVersion, thunderstorePackages, ignoreCache, (progress: number, modName: string, status: number, err: R2Error | null) => {
+                    ThunderstoreDownloaderProvider.instance.download(profile.asImmutableProfile(), tsMod, tsVersion, ignoreCache, (progress: number, modName: string, status: number, err: R2Error | null) => {
                         const assignIndex = DownloadModModal.allVersions.findIndex(([number, val]) => number === currentAssignId);
                         if (status === StatusEnum.FAILURE) {
                             if (err !== null) {
@@ -219,34 +219,30 @@ let assignId = 0;
             return this.$store.state.modals.isDownloadModModalOpen;
         }
 
-        get thunderstorePackages(): ThunderstoreMod[] {
-            return this.$store.state.tsMods.mods;
-        }
-
         @Watch('$store.state.modals.downloadModModalMod')
         async getModVersions() {
             this.currentVersion = null;
             if (this.thunderstoreMod !== null) {
-                this.selectedVersion = this.thunderstoreMod.getVersions()[0].getVersionNumber().toString();
-                this.versionNumbers = this.thunderstoreMod.getVersions()
-                    .map(value => value.getVersionNumber().toString());
+                this.selectedVersion = this.thunderstoreMod.getLatestVersion();
+                this.recommendedVersion = null;
+
+                this.versionNumbers = await PackageDb.getPackageVersionNumbers(
+                    this.activeGame.internalFolderName,
+                    this.thunderstoreMod.getFullName()
+                );
 
                 const foundRecommendedVersion = MOD_LOADER_VARIANTS[this.activeGame.internalFolderName]
                     .find(value => value.packageName === this.thunderstoreMod!.getFullName());
 
-                if (foundRecommendedVersion === undefined || foundRecommendedVersion.recommendedVersion === undefined) {
-                    this.recommendedVersion = null;
-                    this.selectedVersion = this.thunderstoreMod.getVersions()[0].getVersionNumber().toString();
-                } else {
+                if (foundRecommendedVersion && foundRecommendedVersion.recommendedVersion) {
                     this.recommendedVersion = foundRecommendedVersion.recommendedVersion.toString();
 
-                    // Bind to recommended version or fall back to latest
-                    const thunderstoreRecommendedVersion = this.thunderstoreMod.getVersions()
-                        .find(value => value.getVersionNumber().isEqualTo(foundRecommendedVersion.recommendedVersion!));
-                    if (thunderstoreRecommendedVersion !== undefined) {
-                        this.selectedVersion = thunderstoreRecommendedVersion.getVersionNumber().toString();
-                    } else {
-                        this.selectedVersion = this.thunderstoreMod.getVersions()[0].getVersionNumber().toString()
+                    // Auto-select recommended version if it's found.
+                    const recommendedVersion = this.versionNumbers.find(
+                        (ver) => ver === foundRecommendedVersion.recommendedVersion!.toString()
+                    );
+                    if (recommendedVersion) {
+                        this.selectedVersion = recommendedVersion;
                     }
                 }
 
@@ -264,26 +260,32 @@ let assignId = 0;
             this.$store.commit("closeDownloadModModal");
         }
 
-        downloadThunderstoreMod() {
+        async downloadThunderstoreMod() {
             const refSelectedThunderstoreMod: ThunderstoreMod | null = this.thunderstoreMod;
             const refSelectedVersion: string | null = this.selectedVersion;
             if (refSelectedThunderstoreMod === null || refSelectedVersion === null) {
                 // Shouldn't happen, but shouldn't throw an error.
                 return;
             }
-            const version = refSelectedThunderstoreMod.getVersions()
-                .find((modVersion: ThunderstoreVersion) => modVersion.getVersionNumber().toString() === refSelectedVersion);
-            if (version === undefined) {
+
+            let version: ThunderstoreVersion;
+
+            try {
+                version = await PackageDb.getVersionAsThunderstoreVersion(
+                    this.activeGame.internalFolderName,
+                    refSelectedThunderstoreMod.getFullName(),
+                    refSelectedVersion
+                );
+            } catch {
                 return;
             }
+
             this.downloadHandler(refSelectedThunderstoreMod, version);
         }
 
-        // TODO: rethink how this method and provider's downloadLatestOfAll()
-        // access the local mod list and TS mod list.
         async downloadLatest() {
             this.closeModal();
-            const modsWithUpdates: ThunderstoreCombo[] = this.$store.getters['profile/modsWithUpdates'];
+            const modsWithUpdates: ThunderstoreCombo[] = await this.$store.dispatch('profile/getCombosWithUpdates');
             const currentAssignId = assignId++;
             const progressObject = {
                 progress: 0,
@@ -295,7 +297,7 @@ let assignId = 0;
             this.downloadObject = progressObject;
             DownloadModModal.allVersions.push([currentAssignId, this.downloadObject]);
             this.downloadingMod = true;
-            ThunderstoreDownloaderProvider.instance.downloadLatestOfAll(modsWithUpdates, this.thunderstorePackages, this.ignoreCache, (progress: number, modName: string, status: number, err: R2Error | null) => {
+            ThunderstoreDownloaderProvider.instance.downloadLatestOfAll(modsWithUpdates, this.ignoreCache, (progress: number, modName: string, status: number, err: R2Error | null) => {
                 const assignIndex = DownloadModModal.allVersions.findIndex(([number, val]) => number === currentAssignId);
                 if (status === StatusEnum.FAILURE) {
                     if (err !== null) {
@@ -337,7 +339,7 @@ let assignId = 0;
             DownloadModModal.allVersions.push([currentAssignId, this.downloadObject]);
             this.downloadingMod = true;
             setTimeout(() => {
-                ThunderstoreDownloaderProvider.instance.download(this.profile.asImmutableProfile(), tsMod, tsVersion, this.thunderstorePackages, this.ignoreCache, (progress: number, modName: string, status: number, err: R2Error | null) => {
+                ThunderstoreDownloaderProvider.instance.download(this.profile.asImmutableProfile(), tsMod, tsVersion, this.ignoreCache, (progress: number, modName: string, status: number, err: R2Error | null) => {
                     const assignIndex = DownloadModModal.allVersions.findIndex(([number, val]) => number === currentAssignId);
                     if (status === StatusEnum.FAILURE) {
                         if (err !== null) {

@@ -2,8 +2,8 @@ import { ActionTree, GetterTree, MutationTree } from 'vuex';
 
 import { State as RootState } from '../index';
 import ManifestV2 from '../../model/ManifestV2';
-import ThunderstoreCombo from '../../model/ThunderstoreCombo';
 import ThunderstoreMod from '../../model/ThunderstoreMod';
+import VersionNumber from '../../model/VersionNumber';
 import CdnProvider from '../../providers/generic/connection/CdnProvider';
 import ConnectionProvider from '../../providers/generic/connection/ConnectionProvider';
 import * as PackageDb from '../../r2mm/manager/PackageDexieStore';
@@ -12,7 +12,7 @@ import { retry } from '../../utils/Common';
 import { Deprecations } from '../../utils/Deprecations';
 import { fetchAndProcessBlobFile } from '../../utils/HttpUtils';
 
-interface CachedMod {
+export interface CachedMod {
     tsMod: ThunderstoreMod | undefined;
     isLatest: boolean;
 }
@@ -81,7 +81,7 @@ export const TsModsModule = {
                 if (tsMod === undefined) {
                     state.cache.set(cacheKey, {tsMod: undefined, isLatest: true});
                 } else {
-                    const latestVersionNumber = tsMod.getLatestVersion().getVersionNumber();
+                    const latestVersionNumber = new VersionNumber(tsMod.getLatestVersion());
                     const isLatest = mod.getVersionNumber().isEqualOrNewerThan(latestVersionNumber);
                     state.cache.set(cacheKey, {tsMod, isLatest});
                 }
@@ -104,20 +104,6 @@ export const TsModsModule = {
         /*** Is the version of a mod defined by ManifestV2 the newest version? */
         isLatestVersion: (_state, getters) => (mod: ManifestV2): boolean => {
             return getters.cachedMod(mod).isLatest;
-        },
-
-        /*** Which locally installed mods have updates in Thunderstore? */
-        modsWithUpdates: (state, getters) => (profileMods: ManifestV2[]) => {
-            return profileMods
-                .filter(mod => !getters.isLatestVersion(mod))
-                .map((mod): ThunderstoreMod | undefined => getters.tsMod(mod))
-                .filter((tsMod): tsMod is ThunderstoreMod => tsMod !== undefined)
-                .map((tsMod) => {
-                    const combo = new ThunderstoreCombo();
-                    combo.setMod(tsMod);
-                    combo.setVersion(tsMod.getLatestVersion());
-                    return combo;
-                });
         },
 
         /*** Return ThunderstoreMod representation of a ManifestV2 */

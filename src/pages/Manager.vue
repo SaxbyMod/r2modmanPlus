@@ -15,7 +15,7 @@
 			<div class="modal-background" @click="showSteamIncorrectDirectoryModal = false"></div>
 			<div class='modal-content'>
 				<div class='notification is-danger'>
-					<h3 class='title'>Failed to set the Steam directory</h3>
+					<h3 class='title'>Failed to set the Steam folder</h3>
 					<p>The steam executable was not selected.</p>
 					<p>If this error has appeared but the executable is correct, please run as administrator.</p>
 				</div>
@@ -27,7 +27,7 @@
 			<div class="modal-background" @click="showRor2IncorrectDirectoryModal = false"></div>
 			<div class='modal-content'>
 				<div class='notification is-danger'>
-					<h3 class='title'>Failed to set the {{ activeGame.displayName }} directory</h3>
+					<h3 class='title'>Failed to set the {{ activeGame.displayName }} folder</h3>
 					<p>The executable must be either of the following: "{{ activeGame.exeName.join('", "') }}".</p>
 					<p>If this error has appeared but the executable is correct, please run as administrator.</p>
 				</div>
@@ -141,7 +141,6 @@ import Vue from 'vue';
 import Component from 'vue-class-component';
 import { Hero, Link, Modal, Progress } from '../components/all';
 
-import ThunderstoreMod from '../model/ThunderstoreMod';
 import ThunderstoreCombo from '../model/ThunderstoreCombo';
 import ProfileModList from '../r2mm/mods/ProfileModList';
 import PathResolver from '../r2mm/manager/PathResolver';
@@ -214,10 +213,6 @@ import ModalCard from '../components/ModalCard.vue';
             return this.$store.getters['profile/activeProfile'];
         };
 
-		get thunderstoreModList(): ThunderstoreMod[] {
-            return this.$store.state.tsMods.mods;
-        }
-
 		get localModList(): ManifestV2[] {
 			return this.$store.state.profile.modList;
 		}
@@ -280,7 +275,7 @@ import ModalCard from '../components/ModalCard.vue';
                             this.showRor2IncorrectDirectoryModal = true;
                         }
                     } catch (e) {
-                        const err = R2Error.fromThrownValue(e, 'Failed to change the game directory');
+                        const err = R2Error.fromThrownValue(e, 'Failed to change the game folder');
                         this.$store.commit('error/handleError', err);
                     }
                 }
@@ -304,7 +299,7 @@ import ModalCard from '../components/ModalCard.vue';
 							throw new Error("The selected executable is not gamelaunchhelper.exe");
 						}
 					} catch (e) {
-						const err = R2Error.fromThrownValue(e, 'Failed to change the game directory');
+						const err = R2Error.fromThrownValue(e, 'Failed to change the game folder');
 						this.$store.commit('error/handleError', err);
 					}
 				}
@@ -356,7 +351,7 @@ import ModalCard from '../components/ModalCard.vue';
                             this.showSteamIncorrectDirectoryModal = true;
                         }
                     } catch (e) {
-                        const err = R2Error.fromThrownValue(e, 'Failed to change the Steam directory');
+                        const err = R2Error.fromThrownValue(e, 'Failed to change the Steam folder');
                         this.$store.commit('error/handleError', err);
                     }
 				}
@@ -619,8 +614,9 @@ import ModalCard from '../components/ModalCard.vue';
 			this.launchParametersModel = this.settings.getContext().gameSpecific.launchParameters;
 			const ignoreCache = this.settings.getContext().global.ignoreCache;
 
-			InteractionProvider.instance.hookModInstallProtocol(async data => {
-                const combo: ThunderstoreCombo | R2Error = ThunderstoreCombo.fromProtocol(data, this.thunderstoreModList);
+            InteractionProvider.instance.hookModInstallProtocol(async (protocolUrl) => {
+                const game = this.$store.state.activeGame;
+                const combo: ThunderstoreCombo | R2Error = await ThunderstoreCombo.fromProtocol(protocolUrl, game);
                 if (combo instanceof R2Error) {
                     this.$store.commit('error/handleError', {
                         error: combo,
@@ -628,7 +624,7 @@ import ModalCard from '../components/ModalCard.vue';
                     });
                     return;
                 }
-                DownloadModModal.downloadSpecific(this.profile, combo, this.thunderstoreModList, ignoreCache)
+                DownloadModModal.downloadSpecific(this.profile, combo, ignoreCache)
                     .then(async value => {
                         const modList = await ProfileModList.getModList(this.profile.asImmutableProfile());
                         if (!(modList instanceof R2Error)) {
